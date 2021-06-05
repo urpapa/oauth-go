@@ -1,0 +1,23 @@
+{{define "base"}}<!DOCTYPE html><html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8">
+    <title>{{template "title" .}}</title>
+  {{ block "styles" .}}<style>
+  h1 {
+  color : #400000
+  }
+  </style>{{ end }}
+
+    <script type="text/javascript">
+        function click(){
+            alert("test");
+            this.submit();
+        }
+    </script>
+</head>
+<body>
+<h1>{{template "title" .}}</h1>
+{{template "content" .}}
+{{block "script" .}}{{end}}
+</body>
+</html>{{end}}

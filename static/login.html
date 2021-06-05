@@ -1,0 +1,8 @@
+{{define "title"}} login {{end}}
+{{define "content"}}
+<form class="form-signin center" role="form" action="/dologin" method="post">
+<label>userName:</label><input type="text" name="username" id="username">
+<label>password:</label><input type="password" name="password" id="password">
+    <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
+</form>
+{{end}}
