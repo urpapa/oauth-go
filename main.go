@@ -7,8 +7,10 @@ import (
 	"net/http/pprof"
 	_ "net/http/pprof"
 	"runtime"
+	"time"
 	"tommy.com/oauth"
 	"tommy.com/static"
+	code "tommy.com/types"
 	"tommy.com/utils"
 )
 
@@ -16,26 +18,27 @@ import (
 func main() {
 
 	//scheduel clear the cache
-	runtime.GOMAXPROCS(4)
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	go utils.TimeClear()
 	// starting up the server
 	mux := http.NewServeMux()
 	files := http.FileServer(http.Dir("static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", files))
 	mux.HandleFunc("/oauth/authorize", authorization)
-	mux.HandleFunc("/oauth/token",token)
-	mux.HandleFunc("/login",static.Login)
-	mux.HandleFunc("/user",static.Userinfo)
-	mux.HandleFunc("/dologin",doLoing)
+	mux.HandleFunc("/oauth/token", token)
+	mux.HandleFunc("/login", static.Login)
+	mux.HandleFunc("/user", static.Userinfo)
+	mux.HandleFunc("/dologin", doLoing)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	server := &http.Server{
-		Addr:           "127.0.0.1:9999",
-		Handler:        mux,
-	//	ReadTimeout:    time.Duration(8 * int64(time.Second)),
+		Addr:    ":9999",
+		Handler: mux,
+		ReadTimeout:    time.Duration(8 * int64(time.Second)),
+		WriteTimeout:  time.Duration(8* int64(time.Second)),
 		MaxHeaderBytes: 1 << 20,
 	}
 	err := server.ListenAndServe()
@@ -62,44 +65,34 @@ func authorization(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		//判断本次请求是否已经登录
-		json, _ := json2.Marshal(NewRes("403", err.Error()))
+		json, _ := json2.Marshal(static.NewRes("403", err.Error()))
 		w.Write(json)
 	}
-
 
 }
 func token(w http.ResponseWriter, r *http.Request) {
-	token,err:=oauth.AccessToken(w,r)
-	if err==nil{
-	json,_ :=json2.Marshal(token)
-	w.Write(json)
+	token, err := oauth.AccessToken(w, r)
+	if err == nil {
+		json, _ := json2.Marshal(token)
+		w.Write(json)
 	} else {
 		//判断本次请求是否已经登录
-		json, _ := json2.Marshal(NewRes("403", err.Error()))
+		json, _ := json2.Marshal(static.NewRes("403", err.Error()))
 		w.Write(json)
 	}
 
-
 }
 
-func doLoing(w http.ResponseWriter,r *http.Request){
+func doLoing(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	username:=r.PostFormValue("username")
-	password:=r.PostFormValue("password")
-	if username=="test"&& password=="000000"{
-		utils.SetSession(&w,r,"username",username)
-		http.Redirect(w,r,"/user",302)
+	username := r.PostFormValue("username")
+	password := r.PostFormValue("password")
+	if _, ok := code.Checkpwd(username, password); ok {
+		utils.SetSession(&w, r, "username", username)
+		http.Redirect(w, r, "/user", 302)
 	} else {
-		json, _ := json2.Marshal(NewRes("403", "login failed"))
+		json, _ := json2.Marshal(static.NewRes("403", "login failed"))
 		w.Write(json)
 	}
 
-}
-
-type resJson struct {
-	code, msg string
-}
-
-func NewRes(code string, msg string) resJson {
-	return resJson{code: code, msg: msg}
 }

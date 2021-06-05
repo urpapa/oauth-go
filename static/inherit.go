@@ -1,6 +1,7 @@
 package static
 
 import (
+	json2 "encoding/json"
 	"html/template"
 	"net/http"
 	code "tommy.com/types"
@@ -24,10 +25,25 @@ func init() {
 	T["login.html"] = temp
 }
 
-func Login(w http.ResponseWriter,r *http.Request){
-	T["login.html"].ExecuteTemplate(w,"base",nil)
+func Login(w http.ResponseWriter, r *http.Request) {
+	T["login.html"].ExecuteTemplate(w, "base", nil)
 }
-func Userinfo(w http.ResponseWriter,r *http.Request){
-	usernname,_:=utils.GetSession(r,"username")
-	T["user.html"].ExecuteTemplate(w,"base",&code.User{UserName: usernname.(string),UserCode: ""})
+func Userinfo(w http.ResponseWriter, r *http.Request) {
+	usernname, _ := utils.GetSession(r, "username")
+	if usernname != nil {
+		u := code.GetUser(usernname.(string))
+		T["user.html"].ExecuteTemplate(w, "base", u)
+	} else {
+		json, _ := json2.Marshal(NewRes("403", "login failed"))
+		w.Write(json)
+	}
+
+}
+
+type resJson struct {
+	code, msg string
+}
+
+func NewRes(code string, msg string) resJson {
+	return resJson{code: code, msg: msg}
 }

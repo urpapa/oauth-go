@@ -18,7 +18,8 @@ import (
 func Authorize(para *AuthenStruct) *code.Code {
 	if para.ResponseType == "code" {
 		c := code.NewCode()
-		utils.C.Store(c.Code,&c)
+		syncmap:=utils.GetCodeMap(c.Code)
+		syncmap.Store(c.Code, &c)
 		return &c
 	}
 	return nil
@@ -28,10 +29,10 @@ func AccessToken(w http.ResponseWriter, r *http.Request) (token code.AccessToken
 	authorize := r.Header["Authorization"][0]
 	clientid, clientsecret, err := DecodeAuthHeader(authorize)
 	if err != nil {
-	return
+		return
 	}
 	r.ParseMultipartForm(1024)
-	tokenStruct:= TokenStruct{ClientId: clientid, ClientSecret: clientsecret,UserName: r.FormValue(constants.SESSIOIN_USERNAME),Password: r.FormValue("password"), Code: r.FormValue("code"),GrantType: r.FormValue("grant_type")}
+	tokenStruct := TokenStruct{ClientId: clientid, ClientSecret: clientsecret, UserName: r.FormValue(constants.SESSIOIN_USERNAME), Password: r.FormValue("password"), Code: r.FormValue("code"), GrantType: r.FormValue("grant_type")}
 	switch tokenStruct.GrantType {
 	case constants.TYPECODE:
 		log.Println("type is authorization_code ")
@@ -42,24 +43,25 @@ func AccessToken(w http.ResponseWriter, r *http.Request) (token code.AccessToken
 			token = code.NewAccessToken()
 			token.UserName = tokenStruct.UserName
 			//将token存入到缓存中
-			utils.U.Store(token.Token,&token)
+			syncmap:=utils.GetTokenMap(token.Token)
+			syncmap.Store(token.Token, &token)
 		}
 
 		break
 
 	case constants.TYPEPASSWORD:
 		log.Println("grant_type is password")
-		if strings.Contains(tokenStruct.UserName,"user") && tokenStruct.Password == "000000" {
+		if _, ok := code.Checkpwd(tokenStruct.UserName, tokenStruct.Password); ok {
 			token = code.NewAccessToken()
 			token.UserName = tokenStruct.UserName
 			//将token存入到缓存中
-		     utils.U.Store(token.Token,&token)
+			syncmap:=utils.GetTokenMap(token.Token)
+			syncmap.Store(token.Token, &token)
 			//将登录信息写入到cookie中方便测试
-			utils.SetSession(&w,r,"username",tokenStruct.UserName)
+			utils.SetSession(&w, r, "username", tokenStruct.UserName)
 		} else {
 			err = errors.New("username or password invalid")
 		}
-
 
 		break
 

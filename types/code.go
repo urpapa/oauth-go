@@ -2,6 +2,7 @@ package code
 
 import (
 	"encoding/json"
+	"github.com/google/btree"
 	"github.com/google/uuid"
 	"log"
 	"os"
@@ -113,6 +114,7 @@ func loadConfig() {
 */
 func init() {
 	loadConfig()
+	generateUser()
 }
 
 /**
@@ -123,4 +125,62 @@ func CheckClient(clientId string, clientSecret string) bool {
 		return true
 	}
 	return false
+}
+
+/**
+初始化一个btree用于存放用户数据
+*/
+var userBtree = btree.New(3)
+
+/**
+btree对象必须实现的接口放啊
+*/
+func (u *User) Less(item btree.Item) bool {
+
+	paramU := item.(*User)
+	return u.UserName < paramU.UserName
+
+}
+
+/**
+初始化生成60万用户
+*/
+func generateUser() {
+	for i := 0; i < 600000; i++ {
+		userBtree.ReplaceOrInsert(&User{
+			UserName: "user" + strconv.Itoa(i),
+			UserCode: strconv.Itoa(i),
+			Password: "000000",
+		})
+	}
+}
+
+/**
+校验密码并返回数据
+*/
+func Checkpwd(username string, password string) (u *User, ok bool) {
+	ok = false
+	u = nil
+	t := GetUser(username)
+	if t != nil && password == t.Password {
+		u = t
+		ok = true
+		return
+	}
+	return
+
+}
+
+/**
+根据userName查询用户信息
+*/
+func GetUser(username string) *User {
+	tempu := User{
+		UserName: username,
+	}
+	t := userBtree.Get(&tempu)
+	if t != nil {
+		return t.(*User)
+	}
+	return nil
 }

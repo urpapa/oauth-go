@@ -2,13 +2,10 @@ package code
 
 import (
 	"fmt"
-	"github.com/google/uuid"
-	"runtime"
-	"strconv"
-	"sync"
+	"log"
+
 	"testing"
 	"time"
-	"tommy.com/utils"
 )
 
 /**
@@ -29,40 +26,49 @@ func TestCodeExpire(t *testing.T) {
 	}
 }
 
-func TestGloable(t *testing.T) {
-	ch := make(chan map[string]*Session, 1)
-	ch <- utils.SESSION
-	runtime.GOMAXPROCS(runtime.NumCPU())
-	var wg sync.WaitGroup
-	wg.Add(4)
-	go putSessionInfo("gr1:", &wg, ch)
-	go putSessionInfo("gr2:", &wg, ch)
-	go putSessionInfo("gr3:", &wg, ch)
-	go putSessionInfo("gr4:", &wg, ch)
-	wg.Wait()
-	fmt.Printf("---------------------*____________________________________\n")
-	for key, value := range utils.SESSION {
-		fmt.Printf("key is %v,value is %v", key, value)
-	}
-}
+//func TestGloable(t *testing.T) {
+//	ch := make(chan map[string]*Session, 1)
+//	ch <- utils.SESSION
+//	runtime.GOMAXPROCS(runtime.NumCPU())
+//	var wg sync.WaitGroup
+//	wg.Add(4)
+//	go putSessionInfo("gr1:", &wg, ch)
+//	go putSessionInfo("gr2:", &wg, ch)
+//	go putSessionInfo("gr3:", &wg, ch)
+//	go putSessionInfo("gr4:", &wg, ch)
+//	wg.Wait()
+//	fmt.Printf("---------------------*____________________________________\n")
+//	for key, value := range utils.SESSION {
+//		fmt.Printf("key is %v,value is %v", key, value)
+//	}
+//}
 
-func putSessionInfo(num string, wg *sync.WaitGroup, ch chan map[string]*Session) {
-	fmt.Printf("%s in \n", num)
-	chs := <-ch
-	fmt.Printf("%s get the value \n", num)
-	for i := 0; i < 100; i++ {
-		m := make(map[string]interface{})
-		str := num + strconv.Itoa(i)
-		m[num+strconv.Itoa(i)] = &str
-		chs[num+uuid.NewString()] = &Session{Uuid: uuid.NewString(), CreatedAt: time.Now(), Name: strconv.Itoa(i), Attributes: &m}
-	}
-	for key, value := range utils.SESSION {
-		Rattrap := *value.Attributes
-		Rattrap[num] = &num
-		fmt.Printf("grouptings:%v,key is %v,value is %v \n", num, key, value)
+//func putSessionInfo(num string, wg *sync.WaitGroup, ch chan map[string]*Session) {
+//	fmt.Printf("%s in \n", num)
+//	chs := <-ch
+//	fmt.Printf("%s get the value \n", num)
+//	for i := 0; i < 100; i++ {
+//		m := make(map[string]interface{})
+//		str := num + strconv.Itoa(i)
+//		m[num+strconv.Itoa(i)] = &str
+//		chs[num+uuid.NewString()] = &Session{Uuid: uuid.NewString(), CreatedAt: time.Now(), Name: strconv.Itoa(i), Attributes: &m}
+//	}
+//	for key, value := range utils.SESSION {
+//		Rattrap := *value.Attributes
+//		Rattrap[num] = &num
+//		fmt.Printf("grouptings:%v,key is %v,value is %v \n", num, key, value)
+//
+//	}
+//	ch <- chs
+//	fmt.Printf("%s is finished \n", num)
+//	wg.Done()
+//}
 
+func TestCheckpwd(t *testing.T) {
+	u, ok := Checkpwd("user4", "000000")
+	if !ok {
+		t.Failed()
 	}
-	ch <- chs
-	fmt.Printf("%s is finished \n", num)
-	wg.Done()
+	log.Printf("user info is %v", u)
+
 }

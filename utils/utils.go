@@ -3,8 +3,9 @@ package utils
 import (
 	"errors"
 	"github.com/google/uuid"
-
+	"hash/crc32"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 	"tommy.com/constants"
@@ -22,86 +23,107 @@ stpe3: get userInfo with the Given token
 */
 //key is client_id  value is  types.code
 // map[string]*code.Code
-var C  sync.Map
+
+/**
+性能优化问题：CODE,USER,SESSION当前都是现成安全型Map 如果多核环境下也只有一个gogroutine在处理，提升效率 需要按照当前系统的cpu core数量进行sync.map创建
+增加并发能力，提升吞吐量
+ */
+//var C sync.Map
 
 //key is token value is tokenInfo include AccessToken and UserInfo
 // map[string]*code.AccessToken
-var U sync.Map
+//var U sync.Map
+
 //map[string]*code.Session
-var SESSION sync.Map
+//var SESSION sync.Map
+
+var  codeSlice []*sync.Map
+var  tokenSlice []*sync.Map
+var  sessionSlice []*sync.Map
 
 
-//var Mutex sync.Mutex
+func initMap(){
+	codeSlice=make([]*sync.Map,runtime.NumCPU(),runtime.NumCPU())
+	tokenSlice=make([]*sync.Map,runtime.NumCPU(),runtime.NumCPU())
+	sessionSlice=make([]*sync.Map,runtime.NumCPU(),runtime.NumCPU())
+	for i:=0;i<runtime.NumCPU();i++{
+		var s1 sync.Map
+		var s2 sync.Map
+		var s3 sync.Map
+		codeSlice[i]=&s1
+		tokenSlice[i]=&s2
+		sessionSlice[i]=&s3
+	}
+}
 
-/**
-channel 用于并发情况下session的处理，同一时间同一map不能被并发操作.
-为了处理并发使用了chan 和 sync.mutex. 也可以使用sync.map
-*/
-//var ch = make(chan map[string]*code.Session, 1)
-
-//func init() {
-//	C = make(map[string]*code.Code)
-//	U = make(map[string]*code.AccessToken)
-//	SESSION = make(map[string]*code.Session)
-//	ch <- SESSION
-//}
+func init() {
+initMap()
+}
 
 /**
 根据client obtain the code and remove the code
 use only once
 */
 func GetCode(c string) string {
+	C:=codeSlice[HashInt(c)%runtime.NumCPU()]
 	if tp, ok := C.Load(c); ok {
 		//方法调用完成后清理code
 		defer C.Delete(c)
 		//返回code信息
-
 		return tp.(*code.Code).Code
 	}
 	return ""
 }
-
 /**
 get AccessToken,
 */
 func GetToken(token string) (*code.AccessToken, error) {
-	if tp, ok := U.Load(token); ok {
-		return tp.(*code.AccessToken), nil
+	T:=tokenSlice[HashInt(token)%runtime.NumCPU()]
+		if tp, ok := T.Load(token); ok {
+			return tp.(*code.AccessToken), nil
 	}
 	return nil, errors.New("token is not exists")
+}
+
+func GetSessionMap(sessionkey string ) *sync.Map{
+	return sessionSlice[HashInt(sessionkey)%runtime.NumCPU()]
+
+}
+
+func GetCodeMap(code string) *sync.Map{
+	return codeSlice[HashInt(code)%runtime.NumCPU()]
+
+}
+func GetTokenMap(token string) *sync.Map{
+	return tokenSlice[HashInt(token)%runtime.NumCPU()]
+
 }
 
 /**
 循环，清除过期的code 以及token 信息
 */
 func Clear() {
-
-	 C.Range(func(key, value interface{}) bool {
-	 	if value.(*code.Code).Expire(time.Now()){
-			C.Delete(key)
-			return true
-		}
-		 return false
-	 })
-U.Range(func(key, value interface{}) bool {
-	if value.(*code.AccessToken).Expire(time.Now()){
-		U.Delete(key)
-		return true
+	for _,C:= range codeSlice{
+		C.Range(func(key, value interface{}) bool {
+			if value.(*code.Code).Expire(time.Now()) {
+				C.Delete(key)
+				return true
+			}
+			return false
+		})
 	}
-	return false
-})
-}
-
-/**
-set cookie
-*/
-func SetCookies(w http.ResponseWriter, r *http.Request, c *http.Cookie) {
-	w.Header().Set("set-Cookie", c.String())
-}
-
-func isLogedIn(w http.ResponseWriter, r *http.Request) {
+   for _,T:=range tokenSlice{
+	   T.Range(func(key, value interface{}) bool {
+		   if value.(*code.AccessToken).Expire(time.Now()) {
+			   T.Delete(key)
+			   return true
+		   }
+		   return false
+	   })
+   }
 
 }
+
 
 /**
 向当前的session中存入值，操作不走：
@@ -125,17 +147,20 @@ func SetSession(w *http.ResponseWriter, r *http.Request, attr string, obj interf
 	//sessionid的值
 	sessionId = cookie.Value
 	var attrMap map[string]interface{}
-	tmps,ok:=SESSION.Load(sessionId)
+	syncmap:=GetSessionMap(sessionId)
+	tmps, ok := syncmap.Load(sessionId)
 	var s *code.Session
 	if !ok {
 		attrMap = make(map[string]interface{})
 		s = &code.Session{Uuid: sessionId, Name: "", Attributes: &attrMap, CreatedAt: time.Now()}
+		syncmap.Store(sessionId, s)
 	} else {
-		s=tmps.(*code.Session)
+		s = tmps.(*code.Session)
 	}
 	//将具体存session内容存入session中
 	attrMap = *s.Attributes
 	attrMap[attr] = obj
+
 }
 
 var NOSessionValue = errors.New("have no session value for the given key")
@@ -145,9 +170,10 @@ func GetSession(r *http.Request, attr string) (interface{}, error) {
 	if err == http.ErrNoCookie {
 		return nil, NOSessionValue
 	}
-	tmps, ok := SESSION.Load(cookie.Value)
+	syncmap:=GetSessionMap(cookie.Value)
+	tmps, ok := syncmap.Load(cookie.Value)
 	if ok {
-		session:=tmps.(*code.Session)
+		session := tmps.(*code.Session)
 		attrMap := *session.Attributes
 		value, ok2 := attrMap[attr]
 		if ok2 {
@@ -156,6 +182,21 @@ func GetSession(r *http.Request, attr string) (interface{}, error) {
 	}
 	return nil, NOSessionValue
 }
+/**
+计算出一个非负的整数
+ */
+func HashInt(s string) int {
+	v := int(crc32.ChecksumIEEE([]byte(s)))
+	if v >= 0 {
+		return v
+	}
+	if -v >= 0 {
+		return -v
+	}
+	// v == MinInt
+	return 0
+}
+
 
 /**
 task to clear the cache info

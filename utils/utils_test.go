@@ -3,8 +3,10 @@ package utils
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -42,4 +44,8 @@ func FakePost(w http.ResponseWriter, r *http.Request) {
 	//go setGet(w, &temp3, "go3", "go3-obj",&wg)
 	//go setGet(w, &temp4, "go4", "go4-obj",&wg)
 	wg.Wait()
+}
+
+func TestHashInt(t *testing.T) {
+	log.Printf("test:  %v",HashInt("测试一下") %runtime.NumCPU())
 }
